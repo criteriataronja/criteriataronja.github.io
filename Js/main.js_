@@ -1,0 +1,82 @@
+import ImageLayer from '../ol/layer/Image.js';
+import ImageWMS from '../ol/source/ImageWMS.js';
+import Map from '../ol/Map.js';
+import View from '../ol/View.js';
+
+const wmsSource = new ImageWMS({
+    url: 'https://smartcities.upvusig.car.upv.es/geoserver/taronja/wms',
+    params: { 'LAYERS': 'taronja:total_w_param' },
+    serverType: 'geoserver',
+    crossOrigin: null,
+});
+
+const wmsLayer = new ImageLayer({
+    source: wmsSource,
+});
+
+const manzanasSource = new ImageWMS({
+    url: 'https://smartcities.upvusig.car.upv.es/geoserver/taronja/wms',
+    params: { 'LAYERS': 'taronja:catastro_manzanas' },
+    serverType: 'geoserver',
+    crossOrigin: null,
+});
+
+const manzanasLayer = new ImageLayer({
+    source: manzanasSource,
+});
+
+const updateLegend = function (resolution) {
+    const graphicUrl = wmsSource.getLegendUrl(resolution);
+    const img = document.getElementById('legend');
+    img.src = graphicUrl;
+};
+
+const view = new View({
+    center: [-41939.925, 4789023.627],
+    zoom: 12,
+});
+
+const map = new Map({
+    layers: [wmsLayer, manzanasLayer],
+    target: 'map',
+    view: view,
+});
+
+// Initial legend
+const resolution = map.getView().getResolution();
+updateLegend(resolution);
+
+// Update the legend when the resolution changes
+map.getView().on('change:resolution', function (event) {
+    const resolution = event.target.getResolution();
+    updateLegend(resolution);
+});
+
+map.on('singleclick', function (evt) {
+    document.getElementById('info').innerHTML = '';
+    const viewResolution = /** @type {number} */ (view.getResolution());
+    const url = wmsSource.getFeatureInfoUrl(
+        evt.coordinate,
+        viewResolution,
+        'EPSG:3857',
+        { 'INFO_FORMAT': 'text/html' }
+    );
+    if (url) {
+        fetch(url)
+            .then((response) => response.text())
+            .then((html) => {
+                document.getElementById('info').innerHTML = html;
+            });
+    }
+});
+
+map.on('pointermove', function (evt) {
+    if (evt.dragging) {
+        return;
+    }
+    const data = wmsLayer.getData(evt.pixel);
+    const hit = data && data[3] > 0; // transparent pixels have zero for data[3]
+    map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+});
+
+
